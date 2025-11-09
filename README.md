@@ -2,7 +2,7 @@
 
 This project is a scalable, fault-tolerant notification system built with a polyglot microservice architecture. It processes requests asynchronously via RabbitMQ and handles both email and push notifications.
 
-The primary goal is to demonstrate a robust, contract-first design where services (written in any language) can collaborate effectively.
+> **Project "Law"**: All team members **must** read the [**Project Charter**](./docs/PROJECT_CHARTER.md) before writing any code. This document contains the non-negotiable rules for our architecture, contracts, and workflow.
 
 ## 🏛️ System Architecture
 
@@ -23,26 +23,23 @@ Follow these steps to build and run the entire system locally.
 
 * [Docker](https://www.docker.com/get-started)
 * [Docker Compose](https://docs.docker.com/compose/install/)
-* A text editor to modify the environment file.
 
 ### 1. Clone the Repository
 
 ```bash
-git clone git clone [https://github.com/aluyapeter/notify](https://github.com/aluyapeter/notify)
+git clone [https://github.com/aluyapeter/notify](https://github.com/aluyapeter/notify)
 cd notify
 ```
 
 ### 2. Set Up Environment Variables
 
-Copy the example environment file. **This is a mandatory step.**
+Copy the example environment file. **This is a mandatory step** for the services to connect correctly.
 
 ```bash
 cp .env.example .env
 ```
 
-Now, open the `.env` file and:
-1.  Fill in any missing secrets (like `MAILGUN_API_KEY` or `FCM_SERVER_KEY`).
-2.  Review the default ports and database credentials (you usually don't need to change these for a local setup).
+Now, open the `.env` file and fill in any missing secrets (like `MAILGUN_API_KEY` or `FCM_SERVER_KEY`).
 
 ### 3. Build and Run the System
 
@@ -59,31 +56,31 @@ docker-compose up --build -d
 
 ### 4. Verify the System is Running
 
-You can check the health of any service. The main entry point is the API Gateway:
-
+**Test 1: Check Container Health**
+In a new terminal, check that `rabbitmq` and `redis` are running and healthy.
 ```bash
-curl http://localhost:8000/health
+docker-compose ps
 ```
+You should see both services listed with `State` as `Up` (or `running`) and `Health` as `healthy`.
 
-You should receive a `200 OK` response:
-```json
-{
-  "status": "ok"
-}
-```
+**Test 2: Check RabbitMQ Dashboard**
+* Open your browser and go to: **[http://localhost:15672](http://localhost:15672)**
+* Log in with:
+    * **Username:** `guest`
+    * **Password:** `guest`
 
-You can also check the RabbitMQ management UI by visiting [http://localhost:15672](http://localhost:15672) in your browser (user: `guest`, pass: `guest`).
+If you can log in and see the dashboard, the infrastructure is working.
 
 ## 📜 Project Contracts (The "Law")
 
 This project's stability depends on all services obeying a strict set of contracts. **Do not deviate from these.**
 
+* **Full Project Brief:** The complete project charter, principles, and workflow rules.
+    * **Location:** [`/docs/PROJECT_CHARTER.md`](./docs/PROJECT_CHARTER.md)
 * **API Contracts:** All REST API definitions are formally documented in the OpenAPI specification.
-    * **Location:** `/docs/openapi.yml`
+    * **Location:** [`/docs/openapi.yml`](./docs/openapi.yml)
 * **Message Contracts:** All RabbitMQ message payloads are formally defined as JSON Schemas.
-    * **Location:** `/docs/message_schemas.json`
-* **Full Project Brief:** The complete project charter, principles, and workflow rules are in the project charter.
-    * **Location:** `/docs/PROJECT_CHARTER.md` ()
+    * **Location:** [`/docs/message_schemas.json`](./docs/message_schemas.json)
 
 ## 🛠️ Service Directory
 
