@@ -3,7 +3,7 @@
 **Project:** Distributed Notification System
 **Date:** 9 November 2025
 **Source Brief:** [Internal Task Document]
-**Distribution:** [Team Member 1], [Team Member 2], [Team Member 3], [Team Member 4]
+**Distribution:** Saint, Cypher, Adeneey_Dev, Ehiz.aza
 
 ## 1. 🎯 Project Goal
 
@@ -49,8 +49,8 @@ If you violate these principles, you will break the system for everyone.
 We are using a **single GitHub repository (monorepo)**. Each service lives in its own top-level directory. **You are the CEO of your service.**
 
 **Service Assignments:**
-* **Owner 1 (Team Member 1):** `API Gateway Service`
-* **Owner 2 (Team Member 2):** `User Service`
+* **Owner 1 (Saint):** `API Gateway Service`
+* **Owner 2 (Cypher):** `User Service`
 * **Owner 3 (Team Member 3):** `Template Service`
 * **Owner 4 (Team Member 4):** `Email Service` + `Push Service`
 
