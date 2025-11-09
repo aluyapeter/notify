@@ -1,0 +1,22 @@
+{
+  "email_message": {
+    "description": "Schema for messages on the 'email.queue'",
+    "type": "object",
+    "properties": {
+      "request_id": { "type": "string", "format": "uuid" },
+      "user_id": { "type": "string" },
+      "to_email": { "type": "string", "format": "email" }
+    },
+    "required": ["request_id", "user_id", "to_email"]
+  },
+  "push_message": {
+    "description": "Schema for messages on the 'push.queue'",
+    "type": "object",
+    "properties": {
+      "request_id": { "type": "string", "format": "uuid" },
+      "user_id": { "type": "string" },
+      "push_token": { "type": "string" }
+    },
+    "required": ["request_id", "user_id", "push_token"]
+  }
+}

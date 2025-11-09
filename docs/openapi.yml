@@ -1,0 +1,30 @@
+openapi: 3.0.3
+info:
+  title: "Notify - Distributed Notification System API"
+  description: "API contracts for the User Service, Template Service, and API Gateway."
+  version: 1.0.0
+
+paths:
+  # ==================================
+  # API GATEWAY
+  # ==================================
+  /notifications:
+    post:
+      summary: "Submit a new notification"
+      # ... To be defined by the team
+
+  # ==================================
+  # USER SERVICE
+  # ==================================
+  /users/{user_id}:
+    get:
+      summary: "Get user details and preferences"
+      # ... To be defined by the team
+
+  # ==================================
+  # TEMPLATE SERVICE
+  # ==================================
+  /templates/{template_name}:
+    get:
+      summary: "Get a specific template"
+      # ... To be defined by the team
