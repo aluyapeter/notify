@@ -51,7 +51,7 @@ The team is split by service ownership. You are the CEO of your service. You are
 * Adhering to the agreed-upon contracts.
 
 ### Service Assignments:
-* **Owner 1 (Team Member 1):** API Gateway Service
+* **Owner 1 (Saint):** API Gateway Service
 * **Owner 2 (Team Member 2):** User Service
 * **Owner 3 (Team Member 3):** Template Service
 * **Owner 4 (Team Member 4):** Email Service + Push Service
