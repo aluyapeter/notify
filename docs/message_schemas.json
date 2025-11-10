@@ -1,22 +1,54 @@
 {
-  "email_message": {
-    "description": "Schema for messages on the 'email.queue'",
-    "type": "object",
-    "properties": {
-      "request_id": { "type": "string", "format": "uuid" },
-      "user_id": { "type": "string" },
-      "to_email": { "type": "string", "format": "email" }
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NotificationRequestMessage",
+  "description": "The message payload published to RabbitMQ. This schema applies to BOTH email.queue and push.queue.",
+  "type": "object",
+  "properties": {
+    "notification_type": {
+      "type": "string",
+      "enum": ["email", "push"]
     },
-    "required": ["request_id", "user_id", "to_email"]
+    "user_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "template_code": {
+      "type": "string"
+    },
+    "variables": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "link": {
+          "type": "string",
+          "format": "uri"
+        },
+        "meta": {
+          "type": "object",
+          "nullable": true
+        }
+      },
+      "required": ["name", "link"]
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "priority": {
+      "type": "integer"
+    },
+    "metadata": {
+      "type": "object",
+      "nullable": true
+    }
   },
-  "push_message": {
-    "description": "Schema for messages on the 'push.queue'",
-    "type": "object",
-    "properties": {
-      "request_id": { "type": "string", "format": "uuid" },
-      "user_id": { "type": "string" },
-      "push_token": { "type": "string" }
-    },
-    "required": ["request_id", "user_id", "push_token"]
-  }
+  "required": [
+    "notification_type",
+    "user_id",
+    "template_code",
+    "variables",
+    "request_id",
+    "priority"
+  ]
 }
