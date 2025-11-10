@@ -18,11 +18,9 @@ from .config import settings
 import uuid
 from .database import engine, Base, get_db
 
-# --- Constants ---
 RATE_LIMIT_PER_MINUTE = 20
 RATE_LIMIT_WINDOW = 60
 
-# --- Lifespan (Startup/Shutdown) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
