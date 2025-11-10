@@ -113,3 +113,90 @@ MAILGUN_API_KEY=your_key_here
 
 # Push Service
 FCM_SERVER_KEY=your_key_here
+
+```
+
+# 7. 📜 The Contracts (The "Dictionary")
+
+This is the most important section. This is our law.
+
+All contracts are formally defined in `docs/openapi.yml`.
+
+## 7.1. Standard API Response Format
+
+All REST API responses must use this exact JSON structure.
+
+```json
+{
+  "success": true,
+  "message": "Operation successful",
+  "data": { ... },
+  "error": null,
+  "meta": null
+}
+```
+
+- **success** (boolean): `true` for 2xx responses, `false` for 4xx/5xx.
+- **message** (string): Human-readable summary.
+- **data** (object | array | null): The payload. `null` if no data.
+- **error** (string | null): Error code or message (e.g., `VALIDATION_ERROR`). `null` if success.
+- **meta** (object | null): Use only for pagination.
+
+### 7.1.1. PaginationMeta Format
+
+When an endpoint returns a list, the `meta` field must use this structure:
+
+```json
+"meta": {
+  "total": 100,
+  "limit": 10,
+  "page": 1,
+  "total_pages": 10,
+  "has_next": true,
+  "has_previous": false
+}
+```
+
+## 7.2. API Endpoints (The "Law")
+
+These are the minimum required endpoints, formally defined in `docs/openapi.yml`.
+
+| Service Owner | Endpoint | Method | Description |
+|---------------|----------|--------|-------------|
+| API Gateway | `/api/v1/notifications/` | POST | Public: Main entry point to send a notification. |
+| API Gateway | `/api/v1/email/status/` | POST | Internal: Webhook for Email Service to report status. |
+| API Gateway | `/api/v1/push/status/` | POST | Internal: Webhook for Push Service to report status. |
+| User Service | `/api/v1/users/` | POST | Create a new user. |
+| User Service | `/api/v1/users/{user_id}/` | GET | Get a single user's details and preferences. |
+| User Service | `/api/v1/users/{user_id}/` | PUT | Update user details (e.g., add push_token). |
+| Template Service | `/api/v1/templates/{template_code}/` | GET | Get the content of a specific template. |
+| All Services | `/health` | GET | Returns `{"status": "ok"}` if healthy. |
+
+## 7.3. Message Queue Contracts (JSON)
+
+**Exchange**: `notifications.direct` (Type: Direct)
+
+This defines the exact JSON payload to be published by the API Gateway. The full schema is defined in `docs/message_schemas.json`.
+
+### 1. Email Message
+
+- **Routing Key**: `email`
+- **Queue**: `email.queue`
+- **Payload Schema**: See `docs/message_schemas.json`
+
+### 2. Push Message
+
+- **Routing Key**: `push`
+- **Queue**: `push.queue`
+- **Payload Schema**: See `docs/message_schemas.json`
+
+### 3. Failed Message (Dead-Letter)
+
+- **Target Queue**: `failed.queue`
+- **Setup**: The `email.queue` and `push.queue` will be configured to send messages here after they fail.
+
+## 8. 🎯 Performance & Monitoring
+
+**Targets**: Handle 1,000+ notifications/min. API Gateway response < 100ms.
+
+**Logging**: All services must log using the `request_id` as the Correlation ID to trace a request through the entire system.
