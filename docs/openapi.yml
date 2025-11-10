@@ -1,30 +1,289 @@
-openapi: 3.0.3
+openapi: 3.0.0
 info:
-  title: "Notify - Distributed Notification System API"
-  description: "API contracts for the User Service, Template Service, and API Gateway."
-  version: 1.0.0
+  title: Notify: A Distributed Notification System
+  version: "1.0.0"
+  description: API Contracts for the Notification System (Project Law)
+
+servers:
+  - url: /api/v1
+    description: API Root
+
+# ===========================================================================
+#  PATHS (The Endpoints)
+# ===========================================================================
 
 paths:
-  # ==================================
-  # API GATEWAY
-  # ==================================
-  /notifications:
+  /notifications/:
     post:
-      summary: "Submit a new notification"
-      # ... To be defined by the team
+      summary: Send a new notification
+      description: Main public entry point for all notification requests.
+      tags:
+        - API Gateway
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationRequest"
+      responses:
+        "202":
+          description: Request accepted for processing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardApiResponse"
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardApiResponse"
 
-  # ==================================
-  # USER SERVICE
-  # ==================================
-  /users/{user_id}:
-    get:
-      summary: "Get user details and preferences"
-      # ... To be defined by the team
+  /email/status/:
+    post:
+      summary: Update Email Notification Status (Internal)
+      description: Internal webhook for the Email Service to report delivery status.
+      tags:
+        - API Gateway
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusUpdateRequest"
+      responses:
+        "200":
+          description: Status update accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardApiResponse"
 
-  # ==================================
-  # TEMPLATE SERVICE
-  # ==================================
-  /templates/{template_name}:
+  /push/status/:
+    post:
+      summary: Update Push Notification Status (Internal)
+      description: Internal webhook for the Push Service to report delivery status.
+      tags:
+        - API Gateway
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusUpdateRequest"
+      responses:
+        "200":
+          description: Status update accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardApiResponse"
+
+  /users/:
+    post:
+      summary: Create a new user
+      description: Endpoint for the User Service to create a new user.
+      tags:
+        - User Service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreateRequest"
+      responses:
+        "201":
+          description: User created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardApiResponse"
+
+  /users/{user_id}/:
     get:
-      summary: "Get a specific template"
-      # ... To be defined by the team
+      summary: Get User Details
+      description: Get user details, including preferences and contact info.
+      tags:
+        - User Service
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: User data retrieved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardApiResponse"
+
+  /templates/{template_code}/:
+    get:
+      summary: Get Template Details
+      description: Get a notification template by its unique code.
+      tags:
+        - Template Service
+      parameters:
+        - name: template_code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Template data retrieved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardApiResponse"
+
+# ===========================================================================
+#  COMPONENTS (Reusable Schemas)
+# ===========================================================================
+
+components:
+  schemas:
+    # --- Standard API Response ---
+    StandardApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    PaginationMeta:
+      type: object
+      nullable: true
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        page:
+          type: integer
+        total_pages:
+          type: integer
+        has_next:
+          type: boolean
+        has_previous:
+          type: boolean
+
+    # --- Notification Schemas ---
+    NotificationRequest:
+      type: object
+      required:
+        - notification_type
+        - user_id
+        - template_code
+        - variables
+        - request_id
+        - priority
+      properties:
+        notification_type:
+          $ref: "#/components/schemas/NotificationType"
+        user_id:
+          type: string
+          format: uuid
+        template_code:
+          type: string
+        variables:
+          $ref: "#/components/schemas/UserData"
+        request_id:
+          type: string
+        priority:
+          type: integer
+        metadata:
+          type: object
+          nullable: true
+
+    NotificationType:
+      type: string
+      enum:
+        - email
+        - push
+
+    UserData:
+      type: object
+      required:
+        - name
+        - link
+      properties:
+        name:
+          type: string
+        link:
+          type: string
+          format: uri
+        meta:
+          type: object
+          nullable: true
+
+    # --- Status Update Schemas ---
+    StatusUpdateRequest:
+      type: object
+      required:
+        - notification_id
+        - status
+      properties:
+        notification_id:
+          type: string
+        status:
+          $ref: "#/components/schemas/NotificationStatus"
+        timestamp:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    NotificationStatus:
+      type: string
+      enum:
+        - delivered
+        - pending
+        - failed
+
+    # --- User Schemas ---
+    UserCreateRequest:
+      type: object
+      required:
+        - name
+        - email
+        - preferences
+        - password
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        push_token:
+          type: string
+          nullable: true
+        preferences:
+          $ref: "#/components/schemas/UserPreference"
+        password:
+          type: string
+
+    UserPreference:
+      type: object
+      required:
+        - email
+        - push
+      properties:
+        email:
+          type: boolean
+        push:
+          type: boolean
