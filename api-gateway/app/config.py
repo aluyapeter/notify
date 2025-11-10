@@ -7,4 +7,6 @@ class Settings(BaseSettings):
     RABBITMQ_DEFAULT_USER: str = "guest"
     RABBITMQ_DEFAULT_PASS: str = "guest"
 
+    REDIS_HOST: str = "redis"
+
 settings = Settings()
