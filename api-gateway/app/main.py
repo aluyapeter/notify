@@ -30,14 +30,11 @@ async def lifespan(app: FastAPI):
     """
     print("API Gateway starting...")
 
-    # 1. Connect to RabbitMQ
     try:
         publisher.connect()
     except Exception as e:
         print(f"Failed to connect to RabbitMQ on startup: {e}")
-        # Depending on policy, you might want to exit if this fails
 
-    # 2. Test Redis connection
     try:
         if get_redis().ping():
             print("Redis connection successful.")
@@ -48,14 +45,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # --- Code to run on shutdown ---
     print("API Gateway shutting down...")
     publisher.close()
-    await engine.dispose() # Asynchronously close the DB engine connections
+    await engine.dispose() 
 
 app = FastAPI(lifespan=lifespan)
 
-# --- Dependencies ---
 
 async def rate_limit_depend(request: Request, redis: redis.Redis = Depends(get_redis)):
     """
@@ -100,7 +95,6 @@ async def update_status_in_db(
     """
     Helper function to find a log by its *request_id* (UUID) and update it.
     """
-    # Find the log by the request_id
     stmt = select(NotificationLog).filter(NotificationLog.request_id == request_id)
     result = await db.execute(stmt)
     log = result.scalar_one_or_none()
@@ -111,9 +105,7 @@ async def update_status_in_db(
             detail=f"Notification ID not found: {request_id}"
         )
 
-    # --- THIS IS THE FIX ---
-    # The database column is of type NotificationStatus (an Enum)
-    # So we assign the *Enum object* itself, not its .value
+
     log.status = new_status
     # ----------------------
     
@@ -153,12 +145,9 @@ async def send_notification(
     """
     
     try:
-        # 1. Create the log entry
         new_log = NotificationLog(
             request_id=request.request_id,
             user_id=request.user_id,
-            # --- THIS IS THE FIX ---
-            # Assign the Enum *object*, not the .value
             notification_type=request.notification_type,
             status=NotificationStatus.pending
             # ----------------------
@@ -167,10 +156,8 @@ async def send_notification(
         
         await db.flush() 
 
-        # 2. Publish to RabbitMQ
         publisher.publish_message(request)
         
-        # 3. If publish succeeds, commit the database transaction
         await db.commit()
 
         return StandardApiResponse(
@@ -232,7 +219,6 @@ async def email_status_update(
     """
     Internal webhook for the Email Service to report status.
     """
-    # The status_request.notification_id is now correctly a UUID
     await update_status_in_db(
         request_id=status_request.notification_id,
         new_status=status_request.status,
@@ -253,7 +239,6 @@ async def push_status_update(
     """
     Internal webhook for the Push Service to report status.
     """
-    # The status_request.notification_id is now correctly a UUID
     await update_status_in_db(
         request_id=status_request.notification_id,
         new_status=status_request.status,

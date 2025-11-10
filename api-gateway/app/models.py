@@ -13,21 +13,17 @@ from sqlalchemy.orm import declarative_base, Mapped, mapped_column
 from app.database import Base
 
 
-# --- Enums (as defined in the contract) ---
 
-# This is a Python enum
 class NotificationType(str, enum.Enum):
     email = "email"
     push = "push"
 
-# This is a Python enum
 class NotificationStatus(str, enum.Enum):
     delivered = "delivered"
     pending = "pending"
     failed = "failed"
 
 
-# --- Database Model (SQLAlchemy) ---
 
 class NotificationLog(Base):
     __tablename__ = "notification_logs"
@@ -35,11 +31,9 @@ class NotificationLog(Base):
     # Primary Key
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    # Foreign Keys & Data
     request_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), unique=True, nullable=False, index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
 
-    # Enum columns in the DB
     notification_type: Mapped[NotificationType] = mapped_column(
         SQLAlchemyEnum(NotificationType, name="notification_type_enum", create_type=True),
         nullable=False
@@ -52,7 +46,6 @@ class NotificationLog(Base):
 
     error_message: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # Timestamps
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -61,9 +54,7 @@ class NotificationLog(Base):
     )
 
 
-# --- API Schemas (Pydantic) ---
 
-# --- Request Schemas (from openapi.yml) ---
 class UserData(BaseModel):
     name: str
     link: HttpUrl
@@ -91,7 +82,7 @@ class StatusUpdateRequest(BaseModel):
         from_attributes = True
 
 
-# --- Standard API Response (from openapi.yml) ---
+
 class PaginationMeta(BaseModel):
     total: int
     limit: int
