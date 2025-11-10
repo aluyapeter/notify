@@ -3,3 +3,7 @@ pydantic-settings
 pika
 httpx
 redis
+sqlalchemy
+psycopg2-binary
+alembic
+asyncpg

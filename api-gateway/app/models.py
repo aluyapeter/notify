@@ -1,18 +1,69 @@
-from pydantic import BaseModel, HttpUrl, UUID4
+import uuid
+import enum
+from pydantic import BaseModel, Field, HttpUrl, EmailStr
 from typing import Optional, Dict, Any
-from enum import Enum
+
+from sqlalchemy import (
+    Integer, Column, String, DateTime, func, Enum as SQLAlchemyEnum, ForeignKey,
+    Index
+)
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.orm import declarative_base, Mapped, mapped_column
+
+from app.database import Base
 
 
-class NotificationType(str, Enum):
+# --- Enums (as defined in the contract) ---
+
+# This is a Python enum
+class NotificationType(str, enum.Enum):
     email = "email"
     push = "push"
 
-class NotificationStatus(str, Enum):
+# This is a Python enum
+class NotificationStatus(str, enum.Enum):
     delivered = "delivered"
     pending = "pending"
     failed = "failed"
 
 
+# --- Database Model (SQLAlchemy) ---
+
+class NotificationLog(Base):
+    __tablename__ = "notification_logs"
+
+    # Primary Key
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # Foreign Keys & Data
+    request_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), unique=True, nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
+
+    # Enum columns in the DB
+    notification_type: Mapped[NotificationType] = mapped_column(
+        SQLAlchemyEnum(NotificationType, name="notification_type_enum", create_type=True),
+        nullable=False
+    )
+    status: Mapped[NotificationStatus] = mapped_column(
+        SQLAlchemyEnum(NotificationStatus, name="notification_status_enum", create_type=True),
+        nullable=False,
+        default=NotificationStatus.pending
+    )
+
+    error_message: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # Timestamps
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index('ix_notification_logs_request_id', 'request_id', unique=True),
+    )
+
+
+# --- API Schemas (Pydantic) ---
+
+# --- Request Schemas (from openapi.yml) ---
 class UserData(BaseModel):
     name: str
     link: HttpUrl
@@ -20,20 +71,27 @@ class UserData(BaseModel):
 
 class NotificationRequest(BaseModel):
     notification_type: NotificationType
-    user_id: UUID4
+    user_id: uuid.UUID
     template_code: str
     variables: UserData
-    request_id: UUID4 
+    request_id: uuid.UUID
     priority: int
     metadata: Optional[Dict[str, Any]] = None
 
+    class Config:
+        from_attributes = True
+
+
 class StatusUpdateRequest(BaseModel):
-    notification_id: str
+    notification_id: uuid.UUID
     status: NotificationStatus
-    timestamp: Optional[str] = None
     error: Optional[str] = None
 
+    class Config:
+        from_attributes = True
 
+
+# --- Standard API Response (from openapi.yml) ---
 class PaginationMeta(BaseModel):
     total: int
     limit: int

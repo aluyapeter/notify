@@ -8,12 +8,38 @@ services:
       - RABBITMQ_HOST=${RABBITMQ_HOST}
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - REDIS_HOST=${REDIS_HOST}
+      - GATEWAY_DB_HOST=${GATEWAY_DB_HOST}
+      - GATEWAY_DB_NAME=${GATEWAY_DB_NAME}
+      - GATEWAY_DB_USER=${GATEWAY_DB_USER}
+      - GATEWAY_DB_PASS=${GATEWAY_DB_PASS}
+      - GATEWAY_DB_PORT=${GATEWAY_DB_PORT}
     volumes:
-      - ./api-gateway/app:/code/app
+      - ./api-gateway:/code
     depends_on:
       - rabbitmq
+      - redis
+      - gateway-db
     networks:
       - notify_network
+  gateway-db:
+    image: postgres:15-alpine
+    hostname: gateway-db
+    environment:
+      - POSTGRES_DB=${GATEWAY_DB_NAME}
+      - POSTGRES_USER=${GATEWAY_DB_USER}
+      - POSTGRES_PASSWORD=${GATEWAY_DB_PASS}
+    ports:
+      - "5433:5432"
+    volumes:
+      - gateway_db_data:/var/lib/postgresql/data
+    networks:
+      - notify_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GATEWAY_DB_USER} -d ${GATEWAY_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
   rabbitmq:
     image: rabbitmq:3.13-management
     hostname: rabbitmq
@@ -47,3 +73,7 @@ services:
 networks:
   notify_network:
     driver: bridge
+
+volumes:
+  gateway_db_data:
+    driver: local
