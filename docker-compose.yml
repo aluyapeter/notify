@@ -1,11 +1,21 @@
 services:
-
-  # ==================================
-  # shared services
-  # ==================================
-
+  api-gateway:
+    build:
+      context: ./api-gateway
+    ports:
+      - "${GATEWAY_PORT}:8000"
+    environment:
+      - RABBITMQ_HOST=${RABBITMQ_HOST}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      - ./api-gateway/app:/code/app
+    depends_on:
+      - rabbitmq
+    networks:
+      - notify_network
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:3.13-management
     hostname: rabbitmq
     ports:
       - "5672:5672"
@@ -18,9 +28,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - notify_network
 
   redis:
-    image: redis:latest
+    image: redis:7-alpine
     hostname: redis
     ports:
       - "6379:6379"
@@ -29,3 +41,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - notify_network
+      
+networks:
+  notify_network:
+    driver: bridge
