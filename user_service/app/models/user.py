@@ -3,7 +3,8 @@ import json
 import uuid
 import logging
 import bcrypt
-from user_service.app.schema.user import UserRequest, UserUpdate
+from fastapi import HTTPException
+from app.schema.user import UserRequest, UserUpdate
 
 logger = logging.getLogger()
 
@@ -40,11 +41,11 @@ async def create_user(conn: asyncpg.Connection, user: UserRequest):
         return dict(details) if details else None
 
     except Exception as e:
-        logger.exception(f"Exception occurred in create_user: {e}")
-        return None
+        logger.exception("Exception occurred in create_user: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-async def get_user(conn: asyncpg.Connection, user_id: str):
+async def get_user(conn: asyncpg.Connection, user_id: str=None, email: str=None):
     """
     this function gets the instance of the user from the db and returns it as a dict
     :param conn: asyncpg.Connection
@@ -53,14 +54,14 @@ async def get_user(conn: asyncpg.Connection, user_id: str):
     """
     try:
         query = """
-            SELECT * FROM users WHERE user_id = $1
+            SELECT * FROM users WHERE user_id = $1 OR email = $2
         """
-        record = asyncpg.Record
-        user = await conn.fetchrow(query, user_id)
+        user = await conn.fetchrow(query, user_id, email)
 
         return dict(user) if user else None
     except Exception as e:
-        logger.error(f"exception occurred in get user: {e}", exc_info=True)
+        logger.error("exception occurred in get user: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 async def update_user(conn: asyncpg.Connection, user_id: str, data: UserUpdate):
@@ -99,9 +100,9 @@ async def update_user(conn: asyncpg.Connection, user_id: str, data: UserUpdate):
         values.append(user_id)
         query = f"""
             UPDATE users
-            SET {', '.join(fields)}, updated_at = CURRENT_TIMESTAMP
+            SET {', '.join(fields)}
             WHERE user_id = ${len(values)}
-            RETURNING user_id, name, email, push_token, preferences, created_at, updated_at
+            RETURNING user_id, name, email, push_token, preferences, created_at
         """
 
         result = await conn.fetchrow(query, *values)
@@ -111,6 +112,5 @@ async def update_user(conn: asyncpg.Connection, user_id: str, data: UserUpdate):
             return None
 
     except Exception as e:
-        logger.exception(f"Error updating user: {e}")
-        return {"success": False, "message": "An error occurred while updating user"}
-
+        logger.exception("Error updating user: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error") from e

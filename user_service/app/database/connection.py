@@ -16,6 +16,7 @@ DB_PORT = os.getenv("USER_DB_PORT")
 DATABASE_URL = f"postgres://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 async def get_db():
+    """Async generator to provide a database connection."""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         yield conn

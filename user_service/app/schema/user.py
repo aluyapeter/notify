@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 
 
 class UserPreference(BaseModel):
@@ -10,7 +10,7 @@ class UserPreference(BaseModel):
 
 class UserRequest(BaseModel):
     name: str
-    email: str
+    email: EmailStr
     push_token: Optional[str] = ""
     preferences: UserPreference
     password: str
@@ -18,13 +18,15 @@ class UserRequest(BaseModel):
 class UserResponse(BaseModel):
     user_id: str
     name: str
-    email: EmailStr
+    email: str
     push_token: str
     preferences: UserPreference
+    access_token: Optional[str] = None
     created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        json_schema_extra={"exclude_none": True}
+    )
 
 
 class UserUpdate(BaseModel):
