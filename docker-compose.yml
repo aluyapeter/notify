@@ -4,6 +4,48 @@ services:
   # shared services
   # ==================================
 
+  user-service:
+    build:
+      context: ./user-service
+    ports:
+      - "${USER_SERVICE_PORT}:8000"
+    environment:
+      - USER_DB_HOST=${USER_DB_HOST}
+      - USER_DB_NAME=${USER_DB_NAME}
+      - USER_DB_USER=${USER_DB_USER}
+      - USER_DB_PASS=${USER_DB_PASS}
+      - USER_DB_PORT=${USER_DB_PORT}
+      - RABBITMQ_HOST=${RABBITMQ_HOST}
+      - REDIS_HOST=${REDIS_HOST}
+    volumes:
+      - ./user-service:/code
+    depends_on:
+      - user-db
+      - rabbitmq
+      - redis
+    networks:
+      - notify_network
+
+  user-db:
+    image: postgres:15-alpine
+    hostname: user-db
+    environment:
+      - POSTGRES_DB=${USER_DB_NAME}
+      - POSTGRES_USER=${USER_DB_USER}
+      - POSTGRES_PASSWORD=${USER_DB_PASS}
+    ports:
+      - "5434:5432"
+    volumes:
+      - user_db_data:/var/lib/postgresql/data
+    networks:
+      - notify_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${USER_DB_USER} -d ${USER_DB_NAME}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
   rabbitmq:
     image: rabbitmq:3-management
     hostname: rabbitmq
@@ -29,3 +71,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+
+volumes:
+  gateway_db_data:
+    driver: local
+  user_db_data:
+    driver: local
