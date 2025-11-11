@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     GATEWAY_DB_PASS: str = "gateway_pass"
     GATEWAY_DB_PORT: int = 5432
 
+    USER_SERVICE_URL: str = "http://user-service:8001"
+
     @computed_field
     @property
     def DATABASE_URL(self) -> str:

@@ -13,6 +13,7 @@ from app.main import app as fast_app
 from app.database import get_db
 from app.redis_client import get_redis
 from app.amqp_client import publisher as global_publisher
+from app.user_service_client import get_and_cache_user_details
 
 
 @pytest_asyncio.fixture
@@ -52,10 +53,18 @@ def mock_publisher(monkeypatch):
     monkeypatch.setattr("app.main.publisher", publisher_mock)
     return publisher_mock
 
+@pytest.fixture
+def user_service_mock(monkeypatch):
+    mock_func = AsyncMock()
+    
+    monkeypatch.setattr(
+        "app.main.get_and_cache_user_details", 
+        mock_func
+    )
+    return mock_func
 
 @pytest_asyncio.fixture
-async def async_client(db_session_mock, redis_client_mock) -> AsyncGenerator[AsyncClient, None]:
-    """Create an AsyncClient for testing with dependency overrides."""
+async def async_client(db_session_mock, redis_client_mock, user_service_mock) -> AsyncGenerator[AsyncClient, None]:
     fast_app.dependency_overrides[get_db] = lambda: db_session_mock
     fast_app.dependency_overrides[get_redis] = lambda: redis_client_mock
     
@@ -82,11 +91,15 @@ async def test_health_check(async_client: AsyncClient):
 async def test_send_notification_happy_path(
     async_client: AsyncClient, 
     db_session_mock: AsyncMock,
-    mock_publisher: MagicMock
+    mock_publisher: MagicMock,
+    user_service_mock: AsyncMock
 ):
-    """
-    Tests the POST /api/v1/notifications/ endpoint for a successful request.
-    """
+    user_service_mock.return_value = {
+        "user_id": "c4b4b4b4-b4b4-4b4b-b4b4-c4b4b4b4b4b4",
+        "email": "test@example.com",
+        "preferences": {"email": True, "push": True}
+    }
+
     payload = {
         "notification_type": "email",
         "user_id": "c4b4b4b4-b4b4-4b4b-b4b4-c4b4b4b4b4b4",
@@ -104,18 +117,49 @@ async def test_send_notification_happy_path(
     assert response.status_code == status.HTTP_202_ACCEPTED
     assert response.json()["success"] == True
     assert response.json()["data"]["request_id"] == "a1b1b1b1-b1b1-1b1b-b1b1-a1b1b1b1b1b1"
+
+    user_service_mock.assert_called_once()
     
     db_session_mock.add.assert_called_once()
     db_session_mock.commit.assert_called_once()
     
     mock_publisher.publish_message.assert_called_once()
 
+@pytest.mark.asyncio
+async def test_send_notification_user_preferences_disabled(
+    async_client: AsyncClient, 
+    db_session_mock: AsyncMock,
+    mock_publisher: MagicMock,
+    user_service_mock: AsyncMock
+):
+    user_service_mock.return_value = {
+        "user_id": "c4b4b4b4-b4b4-4b4b-b4b4-c4b4b4b4b4b4",
+        "email": "test@example.com",
+        "preferences": {"email": False, "push": True}
+    }
+    
+    payload = {
+      "notification_type": "email",
+      "user_id": "c4b4b4b4-b4b4-4b4b-b4b4-c4b4b4b4b4b4",
+      "template_code": "welcome_email",
+        "variables": {
+            "name": "Peter",
+            "link": "http://example.com/verify"
+        },
+        "request_id": "a1b1b1b1-b1b1-1b1b-b1b1-a1b1b1b1b1b1",
+        "priority": 1
+    }
+    
+    response = await async_client.post("/api/v1/notifications/", json=payload)
+    
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert "User has disabled" in response.json()["detail"]
+    
+    db_session_mock.add.assert_not_called()
+    mock_publisher.publish_message.assert_not_called()
 
 @pytest.mark.asyncio
 async def test_send_notification_validation_error(async_client: AsyncClient):
-    """
-    Tests that a request with an invalid payload fails validation (422).
-    """
     payload = {
         "notification_type": "sms",
         "user_id": "c4b4b4b4-b4b4-4b4b-b4b4-c4b4b4b4b4b4",
@@ -130,7 +174,7 @@ async def test_send_notification_validation_error(async_client: AsyncClient):
 
     response = await async_client.post("/api/v1/notifications/", json=payload)
     
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 @pytest.mark.asyncio
