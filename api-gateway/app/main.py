@@ -10,6 +10,11 @@ from .models import (
     NotificationLog,
     NotificationStatus
 )
+from .http_client import lifespan_http_client  # <-- NEW IMPORT
+from .user_service_client import ( # <-- NEW IMPORTS
+    get_and_cache_user_details,
+    check_user_preferences
+)
 from .amqp_client import publisher
 from .redis_client import redis_client, get_redis
 import redis
@@ -28,18 +33,19 @@ async def lifespan(app: FastAPI):
     """
     print("API Gateway starting...")
 
-    try:
-        publisher.connect()
-    except Exception as e:
-        print(f"Failed to connect to RabbitMQ on startup: {e}")
+    async with lifespan_http_client():
+        try:
+            publisher.connect()
+        except Exception as e:
+            print(f"Failed to connect to RabbitMQ on startup: {e}")
 
-    try:
-        if get_redis().ping():
-            print("Redis connection successful.")
-        else:
-            print("Redis connection failed.")
-    except Exception as e:
-        print(f"Failed to connect to Redis on startup: {e}")
+        try:
+            if get_redis().ping():
+                print("Redis connection successful.")
+            else:
+                print("Redis connection failed.")
+        except Exception as e:
+            print(f"Failed to connect to Redis on startup: {e}")
 
     yield
 
@@ -122,7 +128,6 @@ async def update_status_in_db(
 
 @app.get("/health", status_code=status.HTTP_200_OK, tags=["Monitoring"])
 async def get_health():
-    """Health check endpoint for monitoring."""
     return {"status": "ok"}
 
 
@@ -133,15 +138,22 @@ async def get_health():
           dependencies=[Depends(rate_limit_depend)])
 async def send_notification(
     request: NotificationRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    redis_client: redis.Redis = Depends(get_redis)
 ):
-    """
-    Main entry point for sending a notification.
-    1. Logs the request to the database as "pending".
-    2. Publishes the job to RabbitMQ.
-    This is an atomic transaction. If publishing fails, the DB log is rolled back.
-    """
-    
+    try:
+        user_data = await get_and_cache_user_details(str(request.user_id), redis_client) 
+        
+        if not check_user_preferences(request.notification_type, user_data):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User has disabled this notification type."
+            )
+            
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"User validation failed: {e}")
     try:
         new_log = NotificationLog(
             request_id=request.request_id,
@@ -151,7 +163,6 @@ async def send_notification(
             # ----------------------
         )
         db.add(new_log)
-        
         await db.flush() 
 
         publisher.publish_message(request)
