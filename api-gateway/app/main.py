@@ -10,8 +10,8 @@ from .models import (
     NotificationLog,
     NotificationStatus
 )
-from .http_client import lifespan_http_client  # <-- NEW IMPORT
-from .user_service_client import ( # <-- NEW IMPORTS
+import httpx
+from .user_service_client import (
     get_and_cache_user_details,
     check_user_preferences
 )
@@ -26,32 +26,59 @@ from .database import engine, Base, get_db
 RATE_LIMIT_PER_MINUTE = 20
 RATE_LIMIT_WINDOW = 60
 
+# Global HTTP client
+http_client = None
+
+import asyncio
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Handles application startup and shutdown events.
     """
+    global http_client
     print("API Gateway starting...")
 
-    async with lifespan_http_client():
-        try:
-            publisher.connect()
-        except Exception as e:
-            print(f"Failed to connect to RabbitMQ on startup: {e}")
+    # Initialize HTTP client
+    http_client = httpx.AsyncClient(timeout=10.0)
+    print("HTTP client initialized")
 
+    max_retries = 5
+    retry_delay = 3
+    for attempt in range(max_retries):
         try:
-            if get_redis().ping():
-                print("Redis connection successful.")
-            else:
-                print("Redis connection failed.")
+            print(f"Attempting to connect to RabbitMQ (attempt {attempt + 1}/{max_retries})...")
+            publisher.connect()
+            print("RabbitMQ connection successful")
+            break
         except Exception as e:
-            print(f"Failed to connect to Redis on startup: {e}")
+            print(f"Failed to connect to RabbitMQ: {e}")
+            if attempt < max_retries - 1:
+                print(f"Retrying in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+            else:
+                print("WARNING: Starting without RabbitMQ connection. Messages will fail to publish.")
+
+    # Test Redis connection
+    try:
+        if get_redis().ping():
+            print("Redis connection successful.")
+        else:
+            print("Redis connection failed.")
+    except Exception as e:
+        print(f"Failed to connect to Redis on startup: {e}")
 
     yield
 
     print("API Gateway shutting down...")
+    
+    # Close HTTP client
+    if http_client:
+        await http_client.aclose()
+        print("HTTP client closed")
+    
     publisher.close()
-    await engine.dispose() 
+    await engine.dispose()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -109,10 +136,7 @@ async def update_status_in_db(
             detail=f"Notification ID not found: {request_id}"
         )
 
-
     log.status = new_status
-    # ----------------------
-    
     log.error_message = error_message  # type: ignore
 
     try:
@@ -154,13 +178,13 @@ async def send_notification(
         raise e
     except Exception as e:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"User validation failed: {e}")
+    
     try:
         new_log = NotificationLog(
             request_id=request.request_id,
             user_id=request.user_id,
             notification_type=request.notification_type,
             status=NotificationStatus.pending
-            # ----------------------
         )
         db.add(new_log)
         await db.flush() 
@@ -210,7 +234,7 @@ async def get_notification_status(
         message="Status retrieved successfully.",
         data={
             "request_id": str(log_entry.request_id),
-            "status": log_entry.status.value, # Here we use .value to return the string "pending"
+            "status": log_entry.status.value,
             "last_updated": str(log_entry.updated_at or log_entry.created_at),
             "error": log_entry.error_message
         }

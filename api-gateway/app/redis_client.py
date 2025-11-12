@@ -1,4 +1,5 @@
 import redis
+from typing import Optional
 from redis.exceptions import ConnectionError
 from .config import settings
 
@@ -10,7 +11,7 @@ try:
         decode_responses=True
     )
     
-    redis_client = redis.Redis(connection_pool=redis_pool)
+    redis_client: Optional[redis.Redis] = redis.Redis(connection_pool=redis_pool)
     
     redis_client.ping()
     print("Redis client connected successfully.")
@@ -19,7 +20,7 @@ except ConnectionError as e:
     print(f"Failed to connect to Redis: {e}")
     redis_client = None
 
-def get_redis():
+def get_redis() -> redis.Redis:
     """
     A dependency function that provides a Redis client
     from the connection pool.

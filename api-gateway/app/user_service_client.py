@@ -1,5 +1,6 @@
 import json
 import redis
+from typing import cast, Optional
 from fastapi import Depends, HTTPException, status
 from .redis_client import get_redis
 from .http_client import get_user_details_from_service
@@ -12,19 +13,26 @@ async def get_and_cache_user_details(
     user_id: str,
     redis_client: redis.Redis = Depends(get_redis)
 ) -> dict:
+    """
+    Fetches and caches user details.
+    Checks Redis cache first, falls back to user service if not found.
+    """
     cache_key = f"user_pref:{user_id}"
+    
     try:
-        cached_data = await redis_client.get(cache_key)
+        cached_data = cast(Optional[str], redis_client.get(cache_key))
         if cached_data:
-            return json.loads(cached_data.decode('utf-8'))
+            return json.loads(cached_data)
             
     except RedisError as e:
         print(f"Redis cache GET error, proceeding without cache: {e}")
+    except json.JSONDecodeError as e:
+        print(f"Error decoding cached JSON: {e}")
 
     user_data = await get_user_details_from_service(user_id)
     
     try:
-        await redis_client.setex(
+        redis_client.setex(
             cache_key, 
             USER_PREF_CACHE_TTL, 
             json.dumps(user_data)
@@ -38,8 +46,11 @@ def check_user_preferences(
     notification_type: NotificationType, 
     user_data: dict
 ) -> bool:
+    """
+    Check if user has enabled notifications for the given type.
+    Returns True if preferences not set (opt-in by default).
+    """
     if not user_data.get("preferences"):
-        # Default to "allow" if preferences aren't set
         return True
         
     prefs = user_data["preferences"]

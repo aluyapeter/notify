@@ -17,11 +17,15 @@ services:
     volumes:
       - ./api-gateway:/code
     depends_on:
-      - rabbitmq
-      - redis
-      - gateway-db
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      gateway-db:
+        condition: service_healthy
     networks:
       - notify_network
+      
   gateway-db:
     image: postgres:15-alpine
     hostname: gateway-db
@@ -40,6 +44,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      
   rabbitmq:
     image: rabbitmq:3.13-management
     hostname: rabbitmq
