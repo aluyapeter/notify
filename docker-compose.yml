@@ -40,7 +40,8 @@ services:
     networks:
       - notify_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${GATEWAY_DB_USER} -d ${GATEWAY_DB_NAME}"]
+      test:
+        ["CMD-SHELL", "pg_isready -U ${GATEWAY_DB_USER} -d ${GATEWAY_DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -61,7 +62,6 @@ services:
       retries: 5
     networks:
       - notify_network
-
   redis:
     image: redis:7-alpine
     hostname: redis
@@ -74,11 +74,61 @@ services:
       retries: 5
     networks:
       - notify_network
-      
+  template-service:
+    build:
+      context: ./template-service
+    container_name: template-service
+    env_file:
+      - ./.env
+    ports:
+      - "${TEMPLATE_SERVICE_PORT}:8002"
+    environment:
+      - NODE_ENV=production
+      - TEMPLATE_SERVICE_PORT=8002
+    networks:
+      - notify_network
+    depends_on:
+      template-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8002",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+  template-db:
+    image: postgres:15-alpine
+    container_name: template-db
+    environment:
+      POSTGRES_DB: ${TEMPLATE_DB_NAME}
+      POSTGRES_USER: ${TEMPLATE_DB_USER}
+      POSTGRES_PASSWORD: ${TEMPLATE_DB_PASS}
+    ports:
+      - "5434:5432" # map container port 5432 to host 5434
+    volumes:
+      - template_db_data:/var/lib/postgresql/data
+    networks:
+      - notify_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U template_user -d template_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 networks:
   notify_network:
     driver: bridge
 
 volumes:
   gateway_db_data:
+    driver: local
+  template_db_data:
     driver: local
