@@ -71,7 +71,7 @@ docker-compose up --build
 ### 2. Check the service
 
 ```bash
-http://localhost:8000/health
+http://localhost:8001/health
 ```
 
 Expected response:
@@ -85,7 +85,7 @@ Expected response:
 Visit:
 
 ```bash
-http://localhost:8000/docs
+http://localhost:8001/docs
 ```
 
 Interactive Swagger UI will appear for testing endpoints.
@@ -161,7 +161,7 @@ Authorization: Bearer <jwt_token>
 import requests
 
 # Register
-register_url = "http://localhost:8000/users/"
+register_url = "http://localhost:8001/users/"
 register_data = {
     "name": "cipher",
     "email": "cipher@example.com",
@@ -172,7 +172,7 @@ response = requests.post(register_url, json=register_data)
 print(response.json())
 
 # Login
-login_url = "http://localhost:8000/users/login"
+login_url = "http://localhost:8001/users/login"
 login_data = {
     "email": "cipher@example.com",
     "password": "securepassword"

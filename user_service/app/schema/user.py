@@ -29,6 +29,18 @@ class UserResponse(BaseModel):
     )
 
 
+class GenericResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[dict] = None
+    error: Optional[str] = None
+    meta: Optional[dict] = None
+
+    model_config = ConfigDict(
+        json_schema_extra={"exclude_none": True}
+    )
+
+
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     push_token: Optional[str] = None
