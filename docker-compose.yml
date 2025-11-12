@@ -22,6 +22,7 @@ services:
       - gateway-db
     networks:
       - notify_network
+
   gateway-db:
     image: postgres:15-alpine
     hostname: gateway-db
@@ -40,6 +41,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
   rabbitmq:
     image: rabbitmq:3.13-management
     hostname: rabbitmq
@@ -69,7 +71,28 @@ services:
       retries: 5
     networks:
       - notify_network
-      
+
+  email-service:
+    build: ./email-service
+    container_name: email-service
+    ports:
+      - "${EMAIL_SERVICE_PORT}:3001"
+    environment:
+      - EMAIL_SERVICE_PORT=3001
+      - RABBITMQ_HOST=${RABBITMQ_HOST}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - TEMPLATE_SERVICE_PORT=${TEMPLATE_SERVICE_PORT}
+    depends_on:
+      - rabbitmq
+      - redis
+    networks:
+      - notify_network
+
 networks:
   notify_network:
     driver: bridge
