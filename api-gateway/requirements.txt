@@ -1,0 +1,12 @@
+fastapi[standard]
+pydantic-settings
+pika
+httpx
+redis
+sqlalchemy
+psycopg2-binary
+alembic
+asyncpg
+pytest
+pytest-asyncio
+pytest-mock
