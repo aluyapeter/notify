@@ -1,4 +1,7 @@
+version: '3.8'
+
 services:
+  # --- API GATEWAY SERVICE (Yours) ---
   api-gateway:
     build:
       context: ./api-gateway
@@ -14,6 +17,8 @@ services:
       - GATEWAY_DB_USER=${GATEWAY_DB_USER}
       - GATEWAY_DB_PASS=${GATEWAY_DB_PASS}
       - GATEWAY_DB_PORT=${GATEWAY_DB_PORT}
+      # We add the User Service URL for integration
+      - USER_SERVICE_URL=http://user-service:8001
     volumes:
       - ./api-gateway:/code
     depends_on:
@@ -23,9 +28,13 @@ services:
         condition: service_healthy
       gateway-db:
         condition: service_healthy
+      # Add this dependency so Gateway waits for User Service
+      user-service:
+        condition: service_started 
     networks:
       - notify_network
-      
+
+  # --- GATEWAY DATABASE (Yours) ---
   gateway-db:
     image: postgres:15-alpine
     hostname: gateway-db
@@ -34,7 +43,7 @@ services:
       - POSTGRES_USER=${GATEWAY_DB_USER}
       - POSTGRES_PASSWORD=${GATEWAY_DB_PASS}
     ports:
-      - "5433:5432"
+      - "5433:5432" # Host 5433 -> Container 5432
     volumes:
       - gateway_db_data:/var/lib/postgresql/data
     networks:
@@ -44,7 +53,58 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # --- USER SERVICE (His) ---
+  user-service:
+    build:
+      context: ./user-service
+    ports:
+      - "${USER_SERVICE_PORT}:8001"
+    environment:
+      - RABBITMQ_HOST=${RABBITMQ_HOST}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - REDIS_HOST=${REDIS_HOST}
+      - USER_DB_HOST=${USER_DB_HOST}
+      - USER_DB_NAME=${USER_DB_NAME}
+      - USER_DB_USER=${USER_DB_USER}
+      - USER_DB_PASS=${USER_DB_PASS}
+      - USER_DB_PORT=${USER_DB_PORT}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+    volumes:
+      - ./user-service:/code
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      user-db:
+        condition: service_healthy
+    networks:
+      - notify_network
+
+  # --- USER DATABASE (His) ---
+  user-db:
+    image: postgres:15-alpine
+    hostname: user-db
+    environment:
+      - POSTGRES_DB=${USER_DB_NAME}
+      - POSTGRES_USER=${USER_DB_USER}
+      - POSTGRES_PASSWORD=${USER_DB_PASS}
+    ports:
+      - "5432:5432" # Host 5432 -> Container 5432
+    volumes:
+      - user_db_data:/var/lib/postgresql/data
+    networks:
+      - notify_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${USER_DB_USER} -d ${USER_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
       
+  # --- SHARED SERVICES ---
   rabbitmq:
     image: rabbitmq:3.13-management
     hostname: rabbitmq
@@ -74,11 +134,13 @@ services:
       retries: 5
     networks:
       - notify_network
-      
+
 networks:
   notify_network:
     driver: bridge
 
 volumes:
   gateway_db_data:
+    driver: local
+  user_db_data: # We must define his volume
     driver: local
