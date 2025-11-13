@@ -1,4 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials 
+from typing import Annotated
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -15,6 +17,7 @@ from .user_service_client import (
     get_and_cache_user_details,
     check_user_preferences
 )
+from .http_client import set_http_client, get_http_client
 from .amqp_client import publisher
 from .redis_client import redis_client, get_redis
 import redis
@@ -22,26 +25,24 @@ from redis.exceptions import RedisError
 from .config import settings
 import uuid
 from .database import engine, Base, get_db
+import asyncio
 
 RATE_LIMIT_PER_MINUTE = 20
 RATE_LIMIT_WINDOW = 60
 
-# Global HTTP client
-http_client = None
-
-import asyncio
+http_bearer_scheme = HTTPBearer()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Handles application startup and shutdown events.
     """
-    global http_client
     print("API Gateway starting...")
 
-    # Initialize HTTP client
-    http_client = httpx.AsyncClient(timeout=10.0)
-    print("HTTP client initialized")
+    client = httpx.AsyncClient(timeout=10.0)
+    
+    set_http_client(client)
+    print("HTTP client initialized and injected.")
 
     max_retries = 5
     retry_delay = 3
@@ -59,7 +60,6 @@ async def lifespan(app: FastAPI):
             else:
                 print("WARNING: Starting without RabbitMQ connection. Messages will fail to publish.")
 
-    # Test Redis connection
     try:
         if get_redis().ping():
             print("Redis connection successful.")
@@ -69,40 +69,32 @@ async def lifespan(app: FastAPI):
         print(f"Failed to connect to Redis on startup: {e}")
 
     yield
-
+    
     print("API Gateway shutting down...")
     
-    # Close HTTP client
-    if http_client:
-        await http_client.aclose()
-        print("HTTP client closed")
+    await client.aclose()
+    print("HTTP client closed")
     
     publisher.close()
+    
     await engine.dispose()
 
 app = FastAPI(lifespan=lifespan)
 
 
 async def rate_limit_depend(request: Request, redis: redis.Redis = Depends(get_redis)):
-    """
-    FastAPI Dependency that implements a fixed-window rate limiter.
-    """
     if not request.client:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Could not identify client for rate limiting."
         )
-
     ip = request.client.host
     key = f"rate_limit:{ip}"
-
     try:
         pipeline = redis.pipeline()
         pipeline.incr(key)
         pipeline.expire(key, RATE_LIMIT_WINDOW)
-        
         requests_in_window = pipeline.execute()[0]
-
         if requests_in_window > RATE_LIMIT_PER_MINUTE:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -114,7 +106,6 @@ async def rate_limit_depend(request: Request, redis: redis.Redis = Depends(get_r
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error connecting to rate limiter."
         )
-
     return True
 
 async def update_status_in_db(
@@ -123,22 +114,16 @@ async def update_status_in_db(
     db: AsyncSession, 
     error_message: str | None = None
 ):
-    """
-    Helper function to find a log by its *request_id* (UUID) and update it.
-    """
     stmt = select(NotificationLog).filter(NotificationLog.request_id == request_id)
     result = await db.execute(stmt)
     log = result.scalar_one_or_none()
-    
     if not log:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Notification ID not found: {request_id}"
         )
-
     log.status = new_status
-    log.error_message = error_message  # type: ignore
-
+    log.error_message = error_message 
     try:
         await db.commit()
     except Exception as e:
@@ -148,7 +133,6 @@ async def update_status_in_db(
             detail=f"Failed to update status in database: {e}"
         )
 
-# --- Endpoints ---
 
 @app.get("/health", status_code=status.HTTP_200_OK, tags=["Monitoring"])
 async def get_health():
@@ -162,16 +146,25 @@ async def get_health():
           dependencies=[Depends(rate_limit_depend)])
 async def send_notification(
     request: NotificationRequest,
+    creds: Annotated[HTTPAuthorizationCredentials, Depends(http_bearer_scheme)],
+    
     db: AsyncSession = Depends(get_db),
     redis_client: redis.Redis = Depends(get_redis)
 ):
     try:
-        user_data = await get_and_cache_user_details(str(request.user_id), redis_client) 
+        token = creds.credentials
+        
+        user_data = await get_and_cache_user_details(
+            str(request.user_id), 
+            redis_client,
+            f"Bearer {token}"
+        ) 
         
         if not check_user_preferences(request.notification_type, user_data):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User has disabled this notification type."
+            return StandardApiResponse(
+                success=True,
+                message="Notification suppressed by user preferences.",
+                data={"request_id": str(request.request_id)}
             )
             
     except HTTPException as e:
@@ -215,11 +208,8 @@ async def get_notification_status(
     request_id: uuid.UUID,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Public endpoint to check the status of a notification by its request_id.
-    """
     result = await db.execute(
-        select(NotificationLog).filter(NotificationLog.request_id == request_id)
+        select(NotificationLog).filter(NotificationLog.request_id == request_id) # type: ignore
     )
     log_entry = result.scalar_one_or_none()
 
@@ -249,9 +239,6 @@ async def email_status_update(
     status_request: StatusUpdateRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Internal webhook for the Email Service to report status.
-    """
     await update_status_in_db(
         request_id=status_request.notification_id,
         new_status=status_request.status,
@@ -269,9 +256,6 @@ async def push_status_update(
     status_request: StatusUpdateRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Internal webhook for the Push Service to report status.
-    """
     await update_status_in_db(
         request_id=status_request.notification_id,
         new_status=status_request.status,
