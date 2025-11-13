@@ -2,6 +2,7 @@ import json
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, status
 import bcrypt
+import uuid  # Make sure this is imported
 
 from app.services.auth import get_current_user, generate_token
 from app.database.connection import get_db
@@ -15,7 +16,7 @@ from app.schema.user import (
     GenericResponse
 )
 
-user_router = APIRouter(prefix='api/v1/users', tags=["user"])
+user_router = APIRouter(prefix='/api/v1/users', tags=["user"])
 
 
 @user_router.post(
@@ -28,24 +29,6 @@ async def create_user_route(
     user: UserRequest,
     conn: asyncpg.Connection = Depends(get_db)
 ):
-    """
-    Create a new user account.
-
-    Validates user input, checks for existing users, hashes the password,
-    and stores the new user record in the database.
-
-    Args:
-        user (UserRequest): User signup request body.
-        conn (asyncpg.Connection): Database connection dependency.
-
-    Returns:
-        GenericResponse: A response containing user details upon success.
-
-    Raises:
-        HTTPException:
-            - 400 if required fields are missing or user exists.
-            - 500 if any internal error occurs.
-    """
     try:
         if not all([user.name, user.email, user.password, user.preferences]):
             raise HTTPException(
@@ -94,24 +77,6 @@ async def login(
     user: UserLogin,
     conn: asyncpg.Connection = Depends(get_db)
 ):
-    """
-    Log in a user and return an access token.
-
-    Verifies email and password, generates a JWT for valid users.
-
-    Args:
-        user (UserLogin): Login credentials (email, password).
-        conn (asyncpg.Connection): Database connection dependency.
-
-    Returns:
-        GenericResponse: Authenticated user details including access token.
-
-    Raises:
-        HTTPException:
-            - 404 if user not found.
-            - 401 if invalid credentials.
-            - 500 if any internal error occurs.
-    """
     try:
         existing = await get_user(conn, email=user.email)
         if not existing:
@@ -158,32 +123,22 @@ async def login(
     response_model_exclude_none=True
 )
 async def get_user_route(
-    user_id: str,
+    user_id: uuid.UUID,
     conn: asyncpg.Connection = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    """
-    Retrieve a user's profile by their ID.
-
-    Args:
-        user_id (str): ID of the user to fetch.
-        conn (asyncpg.Connection): Database connection dependency.
-        current_user (dict): Authenticated user information.
-
-    Returns:
-        GenericResponse: User details if found.
-
-    Raises:
-        HTTPException:
-            - 401 if not authenticated.
-            - 404 if user not found.
-            - 500 if internal error occurs.
-    """
     try:
         if not current_user:
             raise HTTPException(status_code=401, detail="Not authenticated")
 
-        user_record = await get_user(conn, user_id=user_id)
+        if current_user['user_id'] != str(user_id):
+            raise HTTPException(status_code=403, detail="Forbidden: You can only view your own profile")
+
+        # --- THIS IS THE FIX ---
+        # We must pass a string to the database function, not a UUID object
+        user_record = await get_user(conn, user_id=str(user_id))
+        # -----------------------
+        
         if not user_record:
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -221,40 +176,23 @@ async def get_user_route(
     response_model_exclude_none=True
 )
 async def update_user_route(
-    user_id: str,
+    user_id: uuid.UUID,
     data: UserUpdate,
     conn: asyncpg.Connection = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    """
-    Update user details for the given user ID.
-
-    Only the authenticated user can update their own profile.
-
-    Args:
-        user_id (str): ID of the user to update.
-        data (UserUpdate): Updated user information.
-        conn (asyncpg.Connection): Database connection dependency.
-        current_user (dict): Authenticated user.
-
-    Returns:
-        GenericResponse: Updated user record.
-
-    Raises:
-        HTTPException:
-            - 401 if not authenticated.
-            - 403 if attempting to update another user's profile.
-            - 404 if user not found.
-            - 500 if any internal error occurs.
-    """
     try:
         if not current_user:
             raise HTTPException(status_code=401, detail="Not authenticated")
 
-        if current_user['user_id'] != user_id:
+        if current_user['user_id'] != str(user_id):
             raise HTTPException(status_code=403, detail="Forbidden: You can only update your own profile")
 
-        user_record = await update_user(conn, user_id, data)
+        # --- THIS IS THE FIX ---
+        # We must pass a string to the database function, not a UUID object
+        user_record = await update_user(conn, str(user_id), data)
+        # -----------------------
+        
         if not user_record:
             raise HTTPException(status_code=404, detail="User not found")
 
