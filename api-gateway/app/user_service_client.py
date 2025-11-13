@@ -11,7 +11,8 @@ USER_PREF_CACHE_TTL = 300
 
 async def get_and_cache_user_details(
     user_id: str,
-    redis_client: redis.Redis = Depends(get_redis)
+    redis_client: redis.Redis,
+    token: str
 ) -> dict:
     """
     Fetches and caches user details.
@@ -29,7 +30,7 @@ async def get_and_cache_user_details(
     except json.JSONDecodeError as e:
         print(f"Error decoding cached JSON: {e}")
 
-    user_data = await get_user_details_from_service(user_id)
+    user_data = await get_user_details_from_service(user_id, token)
     
     try:
         redis_client.setex(
