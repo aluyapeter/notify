@@ -15,7 +15,7 @@ from app.schema.user import (
     GenericResponse
 )
 
-user_router = APIRouter(prefix='/users', tags=["user"])
+user_router = APIRouter(prefix='api/v1/users', tags=["user"])
 
 
 @user_router.post(
