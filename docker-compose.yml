@@ -6,7 +6,7 @@ services:
 
   user-service:
     build:
-      context: ./user_service
+      context: ./user-service
     ports:
       - "${USER_SERVICE_PORT}:8001"
     environment:
@@ -20,7 +20,7 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - JWT_ALGORITHM=${JWT_ALGORITHM}
     volumes:
-      - ./user_service:/code
+      - ./user-service:/code
     depends_on:
       user-db:
         condition: service_healthy
